@@ -5,48 +5,46 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Request } from 'express'; // Bu oddiy Express tipi uchun
 
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(private jwtService: JwtService) {}
 
-  // NOMINI O'ZGARTIRDIK: activate -> canActivate
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const token = this.extractTokenFromHeader(request);
 
     if (!token) {
-      throw new UnauthorizedException('Token topilmadi!');
+      throw new UnauthorizedException('Siz tizimga kirmagansiz (Token topilmadi)');
     }
 
-  try {
-  const payload = await this.jwtService.verifyAsync(token, {
-    secret: 'SECRET_KEY_123', // buni o'zingizniki bilan almashtiring
-  });
+    try {
+      const payload = await this.jwtService.verifyAsync(token, {
+        secret: 'SECRET_KEY_123', // AuthModule dagi secret bilan bir xil bo'lsin
+      });
 
-  // MUHIM QATOR: RolesGuard aynan mana shu 'user'ni qidiradi
-  request.user = {
-    userId: payload.sub,
-    username: payload.username,
-    role: payload.role, // Tokendan kelayotgan rolni requestga qo'shdik
-  };
-  
-} catch {
-  throw new UnauthorizedException();
-}
-return true;
+      // --- ENG MUHIM QISMI: ---
+      // Controllerdagi req.user aynan shu yerdan to'ladi
+      request['user'] = {
+        userId: payload.sub,
+        username: payload.username,
+        role: payload.role,
+      };
+
+    } catch (error) {
+      const message = error.name === 'TokenExpiredError' 
+        ? 'Token muddati o‘tgan' 
+        : 'Token yaroqsiz';
+      throw new UnauthorizedException(message);
+    }
+    return true;
   }
-private extractTokenFromHeader(request: any): string | undefined {
-  // 1. Header'ni har xil yo'l bilan qidiramiz (katta-kichik harfga qarab)
-  const auth = request.headers.authorization || request.headers['authorization'];
-  
-  // Terminalda ko'rish uchun (BU MUHIM!)
-  console.log('--- TEST: Header nima keldi? ---', auth);
 
-  if (!auth) return undefined;
+  private extractTokenFromHeader(request: any): string | undefined {
+    const authHeader = request.headers.authorization;
+    if (!authHeader) return undefined;
 
-  const [type, token] = auth.split(' ');
-  return type === 'Bearer' ? token : undefined;
-}
+    const [type, token] = authHeader.split(' ');
+    return type === 'Bearer' ? token : undefined;
+  }
 }

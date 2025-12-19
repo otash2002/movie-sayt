@@ -1,19 +1,41 @@
-import { Injectable } from '@nestjs/common';
+import { 
+  Injectable, 
+  ConflictException, 
+  InternalServerErrorException, 
+  BadRequestException 
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { User } from '@prisma/client'; // Faqat shu qolishi kerak
+
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  // 1. Argumentga email ni qo'shing
   async create(username: string, email: string, pass: string) {
-  return this.prisma.user.create({
-    data: {
-      username: username,
-      email: email,
-      passwordHash: pass,
-    },
-  });
+    try {
+      return await this.prisma.user.create({
+        data: {
+          username: username,
+          email: email,
+          passwordHash: pass,
+        },
+      });
+    } catch (error) {
+      // P2002 - Prisma-da "Unique constraint" xatosi (Email yoki Username band bo'lsa)
+      if (error.code === 'P2002') {
+        const target = error.meta?.target;
+        throw new ConflictException(
+          `Xato: Bu ${target} allaqachon ro'yxatdan o'tgan! Iltimos, boshqasini kiriting.`
+        );
+      }
+
+      // Agar boshqa Prisma xatosi bo'lsa
+      if (error.code) {
+        throw new BadRequestException(`Ma'lumotlar bazasi xatosi: ${error.code}`);
+      }
+
+      // Kutilmagan texnik xatoliklar uchun
+      throw new InternalServerErrorException("Serverda foydalanuvchi yaratishda xatolik yuz berdi");
+    }
   }
 
   async findOne(username: string) {
@@ -21,6 +43,7 @@ export class UsersService {
       where: { username },
     });
   }
+
   async findAll() {
     return this.prisma.user.findMany({
       select: {
@@ -29,7 +52,6 @@ export class UsersService {
         email: true,
         role: true,
         createdAt: true,
-        // Parolni (passwordHash) chiqarmaymiz, xavfsizlik uchun!
       },
     });
   }

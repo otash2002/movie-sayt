@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { 
+  Injectable, 
+  CanActivate, 
+  ExecutionContext, 
+  ForbiddenException 
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from './roles.decorator';
 
@@ -18,11 +23,12 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    const { user } = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest();
+    const user = request.user;
 
-    // 2. Agar foydalanuvchi topilmasa yoki roli bo'lmasa - bloklaymiz
-    if (!user || !user.role) {
-      return false;
+    // 2. Agar foydalanuvchi avtorizatsiyadan o'tmagan bo'lsa
+    if (!user) {
+      throw new ForbiddenException("Tizimga kirmagansiz. Iltimos, avval login qiling.");
     }
 
     // 3. SUPERADMIN har doim hamma joydan o'tadi
@@ -30,9 +36,18 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    // 4. Solishtirish (Katta-kichik harfga e'tibor berib)
-    return requiredRoles.some((role) => 
-      user.role.toUpperCase() === role.toUpperCase()
+    // 4. Rolni tekshirish
+    const hasRole = requiredRoles.some((role) => 
+      user.role?.toUpperCase() === role.toUpperCase()
     );
+
+    if (!hasRole) {
+      // SHU YERDA TUSHUNARLI XABAR QAYTARAMIZ
+      throw new ForbiddenException(
+        `Kirish taqiqlangan! Ushbu bo'lim faqat [${requiredRoles.join(', ')}] huquqiga ega foydalanuvchilar uchun. Sizning rolingiz: ${user.role}`
+      );
+    }
+
+    return true;
   }
 }
