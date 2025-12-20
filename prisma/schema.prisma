@@ -42,7 +42,7 @@ model User {
   createdAt    DateTime @default(now())
 
   profile       Profile?
-  moviesCreated Movie[]
+  moviesCreated Movie[] @relation("UserCreatedMovies")
   favorites     Favorite[]
   reviews       Review[]
   watchHistory  WatchHistory[]
@@ -100,7 +100,7 @@ model Movie {
   createdAt        DateTime @default(now())
 
   createdById String
-  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdBy   User    @relation("UserCreatedMovies", fields: [createdById], references: [id])
 
   categories   MovieCategory[]
   files        MovieFile[]
@@ -115,6 +115,8 @@ model Category {
   slug        String          @unique
   description String?
   movies      MovieCategory[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @default(now()) @updatedAt // default(now()) qo'shildi
 }
 
 model MovieCategory {

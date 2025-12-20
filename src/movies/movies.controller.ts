@@ -1,34 +1,85 @@
-import { Controller, Get, Post, Body, Query, UseGuards, Param, Delete } from '@nestjs/common';
+import { 
+  Controller, 
+  Get, 
+  Post, 
+  Body, 
+  Patch, 
+  Param, 
+  Delete, 
+  UseGuards, 
+  Query, 
+  Req 
+} from '@nestjs/common';
 import { MoviesService } from './movies.service';
-import { ApiOperation, ApiResponse, ApiTags,ApiQuery, ApiBadRequestResponse, ApiNotFoundResponse} from '@nestjs/swagger'; // ApiQuery qo'shildi
 import { CreateMovieDto } from './dto/create-movie.dto';
+import { UpdateMovieDto } from './dto/update-movie.dto';
+import { 
+  ApiTags, 
+  ApiOperation, 
+  ApiBearerAuth, 
+  ApiResponse, 
+  ApiQuery 
+} from '@nestjs/swagger';
+import { AuthGuard } from '../auth/auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { Role } from '@prisma/client';
 
-@ApiTags('Movies')
+@ApiTags('Movies (Kinolar)')
 @Controller('movies')
 export class MoviesController {
   constructor(private readonly moviesService: MoviesService) {}
-@Post()
-  @ApiOperation({ summary: 'Yangi kino yaratish' })
-  @ApiResponse({ status: 201, description: 'Kino muvaffaqiyatli yaratildi.' })
-  @ApiBadRequestResponse({ description: 'Slug band yoki maʼlumotlar xato yuborilgan.' })
-  @ApiNotFoundResponse({ description: 'User ID yoki Category ID topilmadi.' })
-  async create(@Body() createMovieDto: CreateMovieDto) {
-    return this.moviesService.create(createMovieDto);
-  }
 
+  @ApiBearerAuth('access-token')
+@UseGuards(AuthGuard, RolesGuard)
+@Roles(Role.ADMIN, Role.SUPERADMIN)
+@Post()
+@ApiOperation({ summary: 'Yangi kino qoʻshish (Faqat Admin)' })
+@ApiResponse({ status: 201, description: 'Kino muvaffaqiyatli yaratildi.' })
+// @Req() req: any qismini Swagger e'tiborsiz qoldirishi uchun:
+create(@Body() createMovieDto: CreateMovieDto, @Req() req: any) {
+  // req.user.sub ichida login qilgan foydalanuvchining ID si bo'ladi
+  return this.moviesService.create(createMovieDto, req.user.sub);
+}
   @Get()
-  @ApiOperation({ summary: 'Kinolarni qidirish, filtrlash va sahifalash' })
-  // Swaggerda maydonchalarni chiqarish:
-  @ApiQuery({ name: 'search', required: false, description: 'Kino nomi bo‘yicha qidiruv' })
-  @ApiQuery({ name: 'year', required: false, description: 'Chiqarilgan yili', type: Number })
-  @ApiQuery({ name: 'page', required: false, description: 'Sahifa raqami (default: 1)', type: Number })
-  @ApiQuery({ name: 'limit', required: false, description: 'Har bir sahifadagi kinolar soni (default: 10)', type: Number })
-  async findAll(
+  @ApiOperation({ summary: 'Barcha kinolarni koʻrish va qidirish' })
+  @ApiQuery({ name: 'search', required: false, description: 'Kino nomi yoki tavsifi boʻyicha qidirish' })
+  @ApiQuery({ name: 'year', required: false, description: 'Chiqarilgan yili boʻyicha filtr' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  findAll(
     @Query('search') search?: string,
     @Query('year') year?: number,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
     return this.moviesService.findAll({ search, year, page, limit });
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Bitta kinoni ID orqali koʻrish' })
+  @ApiResponse({ status: 200, description: 'Kino topildi.' })
+  @ApiResponse({ status: 404, description: 'Kino topilmadi.' })
+  findOne(@Param('id') id: string) {
+    return this.moviesService.findOne(id);
+  }
+
+  @ApiBearerAuth('access-token')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPERADMIN)
+  @Patch(':id')
+  @ApiOperation({ summary: 'Kino maʼlumotlarini tahrirlash (Faqat Admin)' })
+  update(@Param('id') id: string, @Body() updateMovieDto: UpdateMovieDto) {
+    return this.moviesService.update(id, updateMovieDto);
+  }
+
+  @ApiBearerAuth('access-token')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPERADMIN)
+  @Delete(':id')
+  @ApiOperation({ summary: 'Kinoni oʻchirish (Faqat Admin)' })
+  @ApiResponse({ status: 200, description: 'Kino muvaffaqiyatli oʻchirildi.' })
+  remove(@Param('id') id: string) {
+    return this.moviesService.remove(id);
   }
 }

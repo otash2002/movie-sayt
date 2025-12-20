@@ -26,6 +26,7 @@ export class AuthGuard implements CanActivate {
       // --- ENG MUHIM QISMI: ---
       // Controllerdagi req.user aynan shu yerdan to'ladi
       request['user'] = {
+        sub: payload.sub,
         userId: payload.sub,
         username: payload.username,
         role: payload.role,
