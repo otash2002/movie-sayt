@@ -13,7 +13,7 @@ import { JwtStrategy } from './jwt.strategy';       // QO'SHILDI (faylingiz bor 
     JwtModule.register({
       global: true,
       secret: 'SECRET_KEY_123',
-      signOptions: { expiresIn: '36000s' },
+      signOptions: { expiresIn: '1d' },
     }),
   ],
   providers: [AuthService, JwtStrategy], // JwtStrategy-ni tanitish

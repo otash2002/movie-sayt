@@ -81,6 +81,7 @@ model Profile {
   fullName  String
   phone     String?
   country   String?
+  avatarUrl String?  // <-- BU MAYDON BO'LISHI SHART!
   userId    String   @unique
   user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())

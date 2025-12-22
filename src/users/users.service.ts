@@ -10,33 +10,43 @@ import { PrismaService } from '../prisma/prisma.service';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async create(username: string, email: string, pass: string) {
-    try {
-      return await this.prisma.user.create({
-        data: {
-          username: username,
-          email: email,
-          passwordHash: pass,
+
+
+async create(username: string, email: string, pass: string) {
+  try {
+    return await this.prisma.user.create({
+      data: {
+        username,
+        email,
+        passwordHash: pass,
+        profile: {
+          create: { fullName: username },
         },
-      });
-    } catch (error) {
-      // P2002 - Prisma-da "Unique constraint" xatosi (Email yoki Username band bo'lsa)
-      if (error.code === 'P2002') {
-        const target = error.meta?.target;
-        throw new ConflictException(
-          `Xato: Bu ${target} allaqachon ro'yxatdan o'tgan! Iltimos, boshqasini kiriting.`
-        );
-      }
+      },
+    });
+  } catch (error) {
+  // P2002 - Prisma Unique constraint xatosi
+  if (error.code === 'P2002') {
+    // meta.target har doim ham massiv bo'lmasligi mumkin, shuni tekshiramiz
+    const target = error.meta?.target;
+    const targetString = Array.isArray(target) ? target.join(', ') : String(target || '');
 
-      // Agar boshqa Prisma xatosi bo'lsa
-      if (error.code) {
-        throw new BadRequestException(`Ma'lumotlar bazasi xatosi: ${error.code}`);
-      }
-
-      // Kutilmagan texnik xatoliklar uchun
-      throw new InternalServerErrorException("Serverda foydalanuvchi yaratishda xatolik yuz berdi");
+    if (targetString.includes('username')) {
+      throw new ConflictException('Bu foydalanuvchi nomi (username) allaqachon band!');
     }
+    
+    if (targetString.includes('email')) {
+      throw new ConflictException('Bu elektron pochta (email) allaqachon ro‘yxatdan o‘tgan!');
+    }
+
+    throw new ConflictException(`Bu ma’lumot allaqachon mavjud: ${targetString}`);
   }
+
+  // Agar boshqa xato bo'lsa, konsolga chiqaradi va 500 beradi
+  console.error('Kutilmagan xato:', error);
+  throw new InternalServerErrorException("Serverda foydalanuvchi yaratishda xatolik yuz berdi");
+}
+}
 
   async findOne(username: string) {
     return this.prisma.user.findUnique({

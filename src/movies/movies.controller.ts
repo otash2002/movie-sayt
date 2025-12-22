@@ -1,29 +1,19 @@
-import { 
-  Controller, 
-  Get, 
-  Post, 
-  Body, 
-  Patch, 
-  Param, 
-  Delete, 
-  UseGuards, 
-  Query, 
-  Req 
+import {
+  Controller, Get, Post, Body, Patch, Param, Delete,
+  UseGuards, Query, Req, UseInterceptors, UploadedFile,
+  ParseFilePipe, MaxFileSizeValidator, FileTypeValidator
 } from '@nestjs/common';
 import { MoviesService } from './movies.service';
 import { CreateMovieDto } from './dto/create-movie.dto';
 import { UpdateMovieDto } from './dto/update-movie.dto';
-import { 
-  ApiTags, 
-  ApiOperation, 
-  ApiBearerAuth, 
-  ApiResponse, 
-  ApiQuery 
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiQuery } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 
 @ApiTags('Movies (Kinolar)')
 @Controller('movies')
@@ -31,35 +21,45 @@ export class MoviesController {
   constructor(private readonly moviesService: MoviesService) {}
 
   @ApiBearerAuth('access-token')
-@UseGuards(AuthGuard, RolesGuard)
-@Roles(Role.ADMIN, Role.SUPERADMIN)
-@Post()
-@ApiOperation({ summary: 'Yangi kino qoʻshish (Faqat Admin)' })
-@ApiResponse({ status: 201, description: 'Kino muvaffaqiyatli yaratildi.' })
-// @Req() req: any qismini Swagger e'tiborsiz qoldirishi uchun:
-create(@Body() createMovieDto: CreateMovieDto, @Req() req: any) {
-  // req.user.sub ichida login qilgan foydalanuvchining ID si bo'ladi
-  return this.moviesService.create(createMovieDto, req.user.sub);
-}
-  @Get()
-  @ApiOperation({ summary: 'Barcha kinolarni koʻrish va qidirish' })
-  @ApiQuery({ name: 'search', required: false, description: 'Kino nomi yoki tavsifi boʻyicha qidirish' })
-  @ApiQuery({ name: 'year', required: false, description: 'Chiqarilgan yili boʻyicha filtr' })
-  @ApiQuery({ name: 'page', required: false, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, example: 10 })
-  findAll(
-    @Query('search') search?: string,
-    @Query('year') year?: number,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPERADMIN)
+  @Post()
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('poster', {
+    storage: diskStorage({
+      destination: './uploads/posters',
+      filename: (req, file, callback) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        callback(null, `${uniqueSuffix}${extname(file.originalname)}`);
+      },
+    }),
+  }))
+  create(
+    @Body() createMovieDto: CreateMovieDto,
+    @Req() req: any,
+    @UploadedFile(new ParseFilePipe({
+      validators: [
+        new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
+        new FileTypeValidator({ fileType: '.(png|jpeg|jpg|webp)' }),
+      ],
+      fileIsRequired: false
+    })) file: Express.Multer.File
   ) {
-    return this.moviesService.findAll({ search, year, page, limit });
+    const posterUrl = file ? `/uploads/posters/${file.filename}` : undefined;
+    return this.moviesService.create({ ...createMovieDto, posterUrl }, req.user.userId);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Kinolarni qidirish va filtrlash' })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'year', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  findAll(@Query() query: any) {
+    return this.moviesService.findAll(query);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Bitta kinoni ID orqali koʻrish' })
-  @ApiResponse({ status: 200, description: 'Kino topildi.' })
-  @ApiResponse({ status: 404, description: 'Kino topilmadi.' })
   findOne(@Param('id') id: string) {
     return this.moviesService.findOne(id);
   }
@@ -68,17 +68,35 @@ create(@Body() createMovieDto: CreateMovieDto, @Req() req: any) {
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.SUPERADMIN)
   @Patch(':id')
-  @ApiOperation({ summary: 'Kino maʼlumotlarini tahrirlash (Faqat Admin)' })
-  update(@Param('id') id: string, @Body() updateMovieDto: UpdateMovieDto) {
-    return this.moviesService.update(id, updateMovieDto);
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('poster', {
+    storage: diskStorage({
+      destination: './uploads/posters',
+      filename: (req, file, callback) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        callback(null, `${uniqueSuffix}${extname(file.originalname)}`);
+      },
+    }),
+  }))
+  update(
+    @Param('id') id: string,
+    @Body() updateMovieDto: UpdateMovieDto,
+    @UploadedFile(new ParseFilePipe({
+      validators: [
+        new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
+        new FileTypeValidator({ fileType: '.(png|jpeg|jpg|webp)' }),
+      ],
+      fileIsRequired: false
+    })) file: Express.Multer.File
+  ) {
+    const posterUrl = file ? `/uploads/posters/${file.filename}` : undefined;
+    return this.moviesService.update(id, { ...updateMovieDto, posterUrl });
   }
 
   @ApiBearerAuth('access-token')
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.SUPERADMIN)
   @Delete(':id')
-  @ApiOperation({ summary: 'Kinoni oʻchirish (Faqat Admin)' })
-  @ApiResponse({ status: 200, description: 'Kino muvaffaqiyatli oʻchirildi.' })
   remove(@Param('id') id: string) {
     return this.moviesService.remove(id);
   }
