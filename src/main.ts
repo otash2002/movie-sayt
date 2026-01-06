@@ -8,19 +8,20 @@ import { join } from 'path';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // 1. Static fayllar uchun (Rasmlarni ko'rish uchun)
-  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+app.enableCors({
+    origin: 'http://localhost:3001', // Frontend porti (sizda 3001 ekan)
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
+// Rasmlar papkasini ochiq qilish
+   app.useStaticAssets(join(__dirname, '..', '..', 'uploads'), {
     prefix: '/uploads/',
   });
-
   // 2. Global Validation
-  app.useGlobalPipes(new ValidationPipe({
+ app.useGlobalPipes(new ValidationPipe({
+    transform: true, // BU JUDA MUHIM!
     whitelist: true,
-    forbidNonWhitelisted: true,
-    transform: true,
-    transformOptions: { enableImplicitConversion: true }
   }));
-
   // 3. Swagger sozlamalari
   const config = new DocumentBuilder()
     .setTitle('Movie Portal API')
@@ -35,6 +36,13 @@ async function bootstrap() {
  SwaggerModule.setup('api', app, document, {
   swaggerOptions: {
     persistAuthorization: true, // Token yo'qolib qolmasligi uchun
+
+    
+
+
+
+
+
   },
   });
 
